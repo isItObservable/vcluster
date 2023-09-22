@@ -1,0 +1,128 @@
+apiVersion: opentelemetry.io/v1alpha1
+kind: OpenTelemetryCollector
+metadata:
+  name: otelvcluster
+  namespace: vcluster-oteldemo
+  labels:
+    app: opentelemetry
+spec:
+  mode: deployment
+  serviceAccount: vc-oteldemo
+  image: otel/opentelemetry-collector-contrib:0.82.0
+  ports:
+  - name: prometheus
+    port: 9090
+    targetPort: 9090
+  - name: metrics
+    targetPort: 8888
+    protocol: TCP
+    port: 8888
+  - name: otlp
+    targetPort: 4317
+    protocol: TCP
+    port: 4317
+  - name: otlp-http
+    targetPort: 4318
+    protocol: TCP
+    port: 4318
+  volumeMounts:
+    - mountPath: /var/log
+      name: varlog
+      readOnly: true
+    - mountPath: /var/lib/docker/containers
+      name: varlibdockercontainers
+      readOnly: true
+  volumes:
+    - name: varlog
+      hostPath:
+        path: /var/log
+    - name: varlibdockercontainers
+      hostPath:
+        path: /var/lib/docker/containers
+  env:
+    - name: MY_POD_IP
+      valueFrom:
+        fieldRef:
+          apiVersion: v1
+          fieldPath: status.podIP
+    - name: k3S_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: oteldemo-token
+          key: token
+    - name: K8S_NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+  config: |
+   
+    extensions:
+      health_check: {}
+      memory_ballast:
+        size_in_percentage: 40
+    processors:
+      batch: {}
+    
+      memory_limiter:
+        check_interval: 5s
+        limit_percentage: 80
+        spike_limit_percentage: 25
+      resource:
+        attributes:
+        - action: insert
+          from_attribute: k8s.pod.uid
+          key: service.instance.id
+
+    receivers:
+      prometheus:
+        config:
+          scrape_configs:
+          - job_name: vcluster-k3s
+            scrape_interval: 10s
+            static_configs:
+            - targets:
+              - oteldemo-prom.vcluster-oteldemo.svc:8443
+            scheme: https
+            authorization:
+              type: Bearer 
+              credentials: $k3S_TOKEN
+          - job_name: vcluster-syncer
+            scrape_interval: 10s
+            static_configs:
+            - targets:
+              - oteldemo-prom.vcluster-oteldemo.svc:6444
+            scheme: https
+            authorization:
+              type: Bearer 
+              credentials: $k3S_TOKEN
+          - job_name: opentelemetry-collector
+            scrape_interval: 10s
+            static_configs:
+            - targets:
+              - ${env:MY_POD_IP}:8888
+
+    exporters:
+      logging:
+        verbosity: detailed
+      otlp:
+        endpoint: oteld-collector.default.svc.cluster.local:4317
+        tls:
+          insecure: true
+    service:
+      extensions:
+      - health_check
+      - memory_ballast
+      pipelines:
+        metrics:
+          exporters:
+          - otlp
+          processors:
+          - memory_limiter
+          - resource
+          - batch
+          receivers:
+          - prometheus
+        
+      telemetry:
+        metrics:
+          address: ${env:MY_POD_IP}:8888

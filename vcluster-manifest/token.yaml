@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: oteldemo-token
+  namespace: vcluster-oteldemo
+  annotations:
+    kubernetes.io/service-account.name: vc-oteldemo
+type: kubernetes.io/service-account-token

@@ -1,0 +1,56 @@
+proxy:
+  metricsServer:
+    nodes:
+      enabled: true
+    pods:
+      enabled: true
+
+hostpathMapper:
+  enabled: true
+
+sync:
+  nodes:
+    enabled: true
+    syncAllNodes: true
+
+mapServices:
+  fromHost:
+    - from: default/oteld-collector
+      to: default/oteld-virtual-collector
+
+isolation:
+  enabled: false
+  podSecurityStandard: baseline
+
+  resourceQuota:
+    enabled: true
+    quota:
+      requests.cpu: 8
+      requests.memory: 30Gi
+      requests.storage: "100Gi"
+      requests.ephemeral-storage: 50Gi
+      limits.cpu: 10
+      limits.memory: 40Gi
+      limits.ephemeral-storage: 60Gi
+      services.nodeports: 0
+      services.loadbalancers: 1
+      count/endpoints: 40
+      count/pods: 20
+      count/services: 20
+      count/secrets: 100
+      count/configmaps: 100
+      count/persistentvolumeclaims: 20
+    scopeSelector:
+      matchExpressions:
+    scopes:
+
+  limitRange:
+    enabled: true
+    default:
+      ephemeral-storage: 2Gi
+      memory: 512Mi
+      cpu: "1"
+    defaultRequest:
+      ephemeral-storage: 3Gi
+      memory: 128Mi
+      cpu: 100m
